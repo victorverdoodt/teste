@@ -1,6 +1,5 @@
 #!/bin/bash
 set -x
-
 # set up install and uninstall directives
 A=-A
 I=-I
