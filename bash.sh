@@ -9,8 +9,8 @@ if [[ "$1" == "down" ]]; then
   I=-D
 fi
 
-ip4_localip=10.8.0.0
-ip4_wg_subnet=10.20.100
+ip4_localip=10.0.0.122
+ip4_wg_subnet=10.8.0.0
 ip4_source=$ip4_wg_subnet.10
 ip4_dest=$ip4_wg_subnet.11
 
