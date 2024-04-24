@@ -1,41 +1,44 @@
-#!/bin/bash
-set -x
-# set up install and uninstall directives
-A=-A
-I=-I
-if [[ "$1" == "down" ]]; then
-  A=-D
-  I=-D
+#!/bin/sh
+set -e
+
+# check if the current user is root
+if [ "$(id -u)" != "0" ]; then
+    echo "Error: you must be root to execute this script" >&2
+    exit 1
 fi
 
-ip4_localip=10.0.0.122
-ip4_wg_subnet=10.8.0
-ip4_source=$ip4_wg_subnet.10
-ip4_dest=$ip4_wg_subnet.11
+# check if is Mac OS
+if [ "$(uname)" = "Darwin" ]; then
+    echo "Error: MacOS is not supported" >&2
+    exit 1
+fi
 
-# SET PUBLIC IP INTERFACE NAME
-ni=enp0s3
-# SET WIREGUARD INTERFACE NAME
-wg=wg0
-# SET FORWARDED PORTS
-TCP_PORTS="25 110 143 465 587 993 995 4190"
+# check if is running inside a container
+if [ -f /.dockerenv ]; then
+    echo "Error: running inside a container is not supported" >&2
+    exit 1
+fi
 
-# Accept it all.
-# Per docker manual, Docker requires forwards to be on its chain
-# use DOCKER-USER instead of FORWARD
-sudo iptables $I DOCKER-USER -s $ip4_wg_subnet.0/24 -j ACCEPT
-sudo iptables $I DOCKER-USER -m state --state RELATED,ESTABLISHED -j ACCEPT
-# Source nat.
-sudo iptables -t nat $A POSTROUTING -s $ip4_wg_subnet.0/24 ! -d $ip4_wg_subnet.0/24 -j SNAT --to $ip4_localip
-# Masquerade.
-sudo iptables -t nat $A POSTROUTING -o $wg -j MASQUERADE
+# check if something is running on port 80
+if lsof -i :80 >/dev/null; then
+    echo "Error: something is already running on port 80" >&2
+    exit 1
+fi
 
-for p in $TCP_PORTS
-do
-    # Allow traffic on specified ports.
-    sudo iptables $A DOCKER-USER -i $ni -o $wg -p tcp --syn --dport $p -m conntrack --ctstate NEW -j ACCEPT
-    # Forward traffic from public network to wireguard on specified ports
-    sudo iptables -t nat $A PREROUTING -i $ni -p tcp --dport $p -j DNAT --to-destination $ip4_dest
-    # Forward traffic from wireguard back to public network on specified ports
-    sudo iptables -t nat $A POSTROUTING -o $wg -p tcp --dport $p -d $ip4_dest -j SNAT --to-source $ip4_source
-done
+# check if something is running on port 443
+if lsof -i :443 >/dev/null; then
+    echo "Error: something is already running on port 443" >&2
+    exit 1
+fi
+
+command_exists() {
+  command -v "$@" > /dev/null 2>&1
+}
+
+if command_exists docker; then
+  echo "Docker already installed"
+else
+  curl -sSL https://get.docker.com | sh
+fi
+
+docker swarm leave --force 1> /dev/null 2> /dev/null || true
